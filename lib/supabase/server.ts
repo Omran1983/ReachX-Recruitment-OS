@@ -1,31 +1,30 @@
-import { cookies } from 'next/headers'
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 
-import { createServerClient } from '@supabase/ssr'
-import { type Database } from '@/database.types';
+export function createSupabaseServer() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export async function createClient() {
-  const cookieStore = await cookies()
+  if (!url || !anon) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
 
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          } catch {
-            // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
-          }
-        },
+  const cookieStore = cookies();
+
+  return createServerClient(url, anon, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
       },
-    }
-  )
+      setAll(cookiesToSet) {
+        // Next.js server components: cookies are mutable only in Route Handlers / Middleware.
+        // This is fine for read paths; auth mutations should happen in route handlers.
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {}
+      },
+    },
+  });
 }
